@@ -34,7 +34,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.TextFieldDefaults
+//import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
+import android.view.KeyEvent
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.focus.onFocusChanged
 import com.example.metronome.ui.theme.MetronomeTheme
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.SoftwareKeyboardController
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,24 +62,61 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun DarkThemeApp(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = MaterialTheme.colorScheme.copy(
-            surface = Color.Black,
-            onSurface = Color.White,
-            primary = Color(0xFFBB86FC)
-        ),
-        shapes = MaterialTheme.shapes, // Domyślne kształty
-        typography = MaterialTheme.typography, // Domyślna typografia
-        content = content
-    )
+fun BpmInput(
+    manualInput: String,
+    onManualInputChange: (String) -> Unit,
+    focusManager: FocusManager,
+    keyboardController: SoftwareKeyboardController?
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = {
+                    focusManager.clearFocus()
+                })
+            }
+            .padding(16.dp)
+    ) {
+        TextField(
+            value = manualInput,
+            onValueChange = { onManualInputChange(it) },
+            label = { Text("Set exact BPM (40–220)") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged {
+                    if (!it.isFocused) {
+                        onManualInputChange("") // Clear when focus is lost
+                    }
+                }
+                .onKeyEvent { event ->
+                    if (event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_ENTER) {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                        true
+                    } else {
+                        false
+                    }
+                },
+            colors = TextFieldDefaults.colors(
+                focusedTextColor = MaterialTheme.colorScheme.primary,
+                unfocusedTextColor = MaterialTheme.colorScheme.primary
+            )
+        )
+    }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TempoControllerApp() {
     var tempo by remember { mutableStateOf(120) }
     var manualInput by remember { mutableStateOf("") }
+
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -133,9 +182,9 @@ fun TempoControllerApp() {
             Spacer(modifier = Modifier.height(32.dp))
 
             // Ręczne wprowadzanie wartości
-            TextField(
-                value = manualInput,
-                onValueChange = {
+            BpmInput(
+                manualInput = manualInput,
+                onManualInputChange = {
                     manualInput = it
                     it.toIntOrNull()?.let { value ->
                         if (value in 40..220) {
@@ -143,14 +192,8 @@ fun TempoControllerApp() {
                         }
                     }
                 },
-                label = { Text("Set exact BPM (40-220)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                colors = TextFieldDefaults.colors(
-                    focusedTextColor = MaterialTheme.colorScheme.primary,
-                    unfocusedTextColor = MaterialTheme.colorScheme.primary
-                )
+                focusManager = focusManager,
+                keyboardController = keyboardController
             )
         }
     }
