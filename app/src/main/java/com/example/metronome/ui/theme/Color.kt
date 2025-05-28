@@ -15,5 +15,5 @@ val PurpleDark = Color(0xFF870F57)
 val GreenDarkMode = Color(0xFF13EC3F)
 val GreenLightMode= Color(0xFF0EA835)
 
-val LightGray = Color(0xFFC0C0C0)
-val DarkGray = Color(0xFF626262)
+val LightGray = Color(0xFFE3E3E3)
+val DarkGray = Color(0xFF2D2D2D)

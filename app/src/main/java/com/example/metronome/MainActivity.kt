@@ -37,8 +37,19 @@ import androidx.compose.material3.TextFieldDefaults
 //import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.onKeyEvent
 import android.view.KeyEvent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -47,6 +58,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import com.example.metronome.ui.theme.MetronomeTheme
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.SoftwareKeyboardController
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -108,15 +120,54 @@ fun BpmInput(
     }
 }
 
+// Define a data class for time signatures
+data class TimeSignature(val numerator: Int, val denominator: Int) {
+    override fun toString(): String = "$numerator/$denominator"
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TempoControllerApp() {
     var tempo by remember { mutableStateOf(120) }
     var manualInput by remember { mutableStateOf("") }
+    var isPlaying by remember { mutableStateOf(false) }
+    var currentBeat by remember { mutableStateOf(0) }
+
+    // Time signature implementation
+    val commonTimeSignatures = listOf(
+        TimeSignature(2, 4),
+        TimeSignature(3, 4),
+        TimeSignature(4, 4),
+        TimeSignature(5, 4),
+        TimeSignature(6, 8),
+        TimeSignature(7, 8),
+        TimeSignature(12, 8)
+    )
+    var selectedTimeSignature by remember { mutableStateOf(TimeSignature(4, 4)) }
+    var showTimeSignatureMenu by remember { mutableStateOf(false) }
+
+    // Animation state
+    val pulseAnimation by animateFloatAsState(
+        targetValue = if (isPlaying) 0.5f else 0.4f,
+        animationSpec = tween(durationMillis = 100),
+        label = "pulse"
+    )
 
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+
+    // Metronome tick handler
+    LaunchedEffect(isPlaying, tempo, selectedTimeSignature) {
+        if (!isPlaying) {
+            currentBeat = 0
+            return@LaunchedEffect
+        }
+
+        while (isPlaying) {
+            currentBeat = (currentBeat % selectedTimeSignature.numerator) + 1
+            delay(60000L / tempo) // Convert BPM to milliseconds
+        }
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -129,19 +180,112 @@ fun TempoControllerApp() {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Wyświetl aktualne tempo
+            // Time signature selector
+            Box {
+                Surface(
+                    modifier = Modifier
+                        .clickable { showTimeSignatureMenu = true }
+                        .padding(8.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Text(
+                        text = selectedTimeSignature.toString(),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontSize = 24.sp,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showTimeSignatureMenu,
+                    onDismissRequest = { showTimeSignatureMenu = false }
+                ) {
+                    commonTimeSignatures.forEach { signature ->
+                        DropdownMenuItem(
+                            text = { Text(text = signature.toString(),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer) },
+                            onClick = {
+                                selectedTimeSignature = signature
+                                showTimeSignatureMenu = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Visual metronome indicator
+            Box(
+                modifier = Modifier
+                    .size(200.dp)
+            )
+            {
+                // Define colors in Composable context
+                val current_beat = Color.Black
+                val beat = Color.White
+                val inactiveColor = Color.White
+                // Draw the beat circles
+                Surface(
+                    modifier = Modifier
+                        .clickable { showTimeSignatureMenu = true }
+                        .padding(8.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val radius = size.minDimension / 4
+                        val centerX = size.width / 2
+                        val centerY = size.height / 2
+                        val angleStep = 360f / selectedTimeSignature.numerator
+
+                        for (i in 0 until selectedTimeSignature.numerator) {
+                            val angle = Math.toRadians((i * angleStep).toDouble())
+                            val x = centerX + (radius * 1.5 * kotlin.math.cos(angle)).toFloat()
+                            val y = centerY + (radius * 1.5 * kotlin.math.sin(angle)).toFloat()
+
+                            val isCurrentBeat = i + 1 == currentBeat
+                            val circleRadius =
+                                if (isCurrentBeat) radius * pulseAnimation else radius * 0.4f
+
+                            drawCircle(
+                                color = if (isCurrentBeat) {
+                                    if (i == 0) current_beat
+                                    else beat
+                                } else {
+                                    inactiveColor.copy(alpha = 0.2f)
+                                },
+                                radius = circleRadius,
+                                center = androidx.compose.ui.geometry.Offset(x, y)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Display current tempo and beat
             Text(
-                text = "Current Tempo",
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 18.sp
+                text = "$tempo BPM | Beat: ${if (isPlaying) "$currentBeat/${selectedTimeSignature.numerator}" else "--"}",
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 24.sp,
+                modifier = Modifier.padding(vertical = 16.dp)
             )
 
-            Text(
-                text = "$tempo BPM",
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = 48.sp,
-                modifier = Modifier.padding(vertical = 24.dp))
+            // Play/Pause button
+            Button(
+                onClick = { isPlaying = !isPlaying },
+                modifier = Modifier.width(150.dp),
+            ) {
+                Text(if (isPlaying) "Pause" else "Play",
+                    color = Color.White)
+            }
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Tempo adjustment controls
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center)
@@ -150,7 +294,7 @@ fun TempoControllerApp() {
                     onClick = { if (tempo > 40) tempo-- },
                     modifier = Modifier.width(100.dp)
                 ) {
-                    Text("-1")
+                    Text("-1",color = Color.White)
                 }
 
                 Spacer(modifier = Modifier.width(16.dp))
@@ -159,18 +303,13 @@ fun TempoControllerApp() {
                     onClick = { if (tempo < 220) tempo++ },
                     modifier = Modifier.width(100.dp)
                 ) {
-                    Text("+1")
+                    Text("+1",color = Color.White)
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Suwak do regulacji tempa
-            Text(
-                text = "Adjust tempo:",
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            // Slider for tempo adjustment
             Slider(
                 value = tempo.toFloat(),
                 onValueChange = { tempo = it.toInt() },
@@ -179,9 +318,9 @@ fun TempoControllerApp() {
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Ręczne wprowadzanie wartości
+            // Manual BPM input
             BpmInput(
                 manualInput = manualInput,
                 onManualInputChange = {
