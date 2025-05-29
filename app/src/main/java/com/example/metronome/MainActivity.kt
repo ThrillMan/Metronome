@@ -1,7 +1,10 @@
 // MainActivity.kt
 package com.example.metronome
+import android.content.Context
 import android.content.res.Configuration
+import android.media.SoundPool
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -48,13 +51,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import com.example.metronome.ui.theme.MetronomeTheme
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.SoftwareKeyboardController
@@ -125,6 +133,64 @@ data class TimeSignature(val numerator: Int, val denominator: Int) {
     override fun toString(): String = "$numerator/$denominator"
 }
 
+@Composable
+fun rememberSoundState(): SoundState {
+    val context = LocalContext.current
+    val isInPreview = LocalInspectionMode.current
+    val soundState = remember { SoundState() }
+
+    LaunchedEffect(Unit) {
+        if (!isInPreview) { // Only initialize in real app
+            soundState.init(context)
+        }
+    }
+
+    return soundState
+}
+@Stable
+class SoundState {
+    private var soundPool: SoundPool? = null
+    private var beatSoundId = 0
+    private var downbeatSoundId = 0
+    private var loaded = false
+
+    fun init(context: Context) {
+        if (soundPool != null) return
+
+        soundPool = SoundPool.Builder()
+            .setMaxStreams(2)
+            .build()
+            .apply {
+                setOnLoadCompleteListener { _, _, status ->
+                    if (status == 0) loaded = true
+                }
+
+                // Load sounds
+                beatSoundId = load(context, R.raw.beat, 1)
+                downbeatSoundId = load(context, R.raw.downbeat, 1)
+            }
+    }
+
+    fun playBeat(isDownbeat: Boolean) {
+        if (!loaded) return
+        val pool = soundPool ?: return
+
+        val soundId = if (isDownbeat) downbeatSoundId else beatSoundId
+
+        try {
+            pool.play(soundId, 1f, 1f, 1, 0, 1f)
+        } catch (e: Exception) {
+            // Ignore in preview
+        }
+    }
+
+    fun release() {
+        soundPool?.release()
+        soundPool = null
+        loaded = false
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TempoControllerApp() {
@@ -155,7 +221,24 @@ fun TempoControllerApp() {
 
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val soundState = rememberSoundState()
+    val isInPreview = LocalInspectionMode.current
 
+    // Play sounds when beat changes
+    LaunchedEffect(currentBeat) {
+        if (isPlaying && !isInPreview) {
+            soundState.playBeat(currentBeat == 1)
+        }
+    }
+
+    // Clean up
+    DisposableEffect(Unit) {
+        onDispose {
+            if (!isInPreview) {
+                soundState.release()
+            }
+        }
+    }
     // Metronome tick handler
     LaunchedEffect(isPlaying, tempo, selectedTimeSignature) {
         if (!isPlaying) {
