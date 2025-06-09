@@ -67,6 +67,10 @@ import com.example.metronome.ui.theme.MetronomeTheme
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.SoftwareKeyboardController
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.text.font.FontWeight
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,13 +78,50 @@ class MainActivity : ComponentActivity() {
         setContent {
             MetronomeTheme {
                 Surface {
-                    TempoControllerApp()
+                    MetronomeApp()
                 }
             }
         }
     }
 }
 
+// Add this enum for navigation
+enum class Screen {
+    Metronome, Settings
+}
+
+
+@Composable
+fun SettingsScreen() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Settings",
+            style = MaterialTheme.typography.headlineLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Placeholder settings content
+        Text("Metronome Volume", style = MaterialTheme.typography.bodyLarge)
+        Slider(
+            value = 0.7f,
+            onValueChange = { /* TODO */ },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Theme Options", style = MaterialTheme.typography.bodyLarge)
+        // Add theme options here later
+    }
+}
 @Composable
 fun BpmInput(
     manualInput: String,
@@ -193,7 +234,7 @@ class SoundState {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TempoControllerApp() {
+fun MetronomeScreen() {
     var tempo by remember { mutableStateOf(120) }
     var manualInput by remember { mutableStateOf("") }
     var isPlaying by remember { mutableStateOf(false) }
@@ -239,6 +280,7 @@ fun TempoControllerApp() {
             }
         }
     }
+
     // Metronome tick handler
     LaunchedEffect(isPlaying, tempo, selectedTimeSignature) {
         if (!isPlaying) {
@@ -252,171 +294,196 @@ fun TempoControllerApp() {
         }
     }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.surface
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Time signature selector
-            Box {
-                Surface(
-                    modifier = Modifier
-                        .clickable { showTimeSignatureMenu = true }
-                        .padding(8.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Text(
-                        text = selectedTimeSignature.toString(),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontSize = 24.sp,
-                        modifier = Modifier.padding(16.dp)
+        // Time signature selector
+        Box {
+            Surface(
+                modifier = Modifier
+                    .clickable { showTimeSignatureMenu = true }
+                    .padding(8.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Text(
+                    text = selectedTimeSignature.toString(),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontSize = 24.sp,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+
+            DropdownMenu(
+                expanded = showTimeSignatureMenu,
+                onDismissRequest = { showTimeSignatureMenu = false }
+            ) {
+                commonTimeSignatures.forEach { signature ->
+                    DropdownMenuItem(
+                        text = { Text(text = signature.toString(),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer) },
+                        onClick = {
+                            selectedTimeSignature = signature
+                            showTimeSignatureMenu = false
+                        }
                     )
                 }
+            }
+        }
 
-                DropdownMenu(
-                    expanded = showTimeSignatureMenu,
-                    onDismissRequest = { showTimeSignatureMenu = false }
-                ) {
-                    commonTimeSignatures.forEach { signature ->
-                        DropdownMenuItem(
-                            text = { Text(text = signature.toString(),
-                                color = MaterialTheme.colorScheme.onPrimaryContainer) },
-                            onClick = {
-                                selectedTimeSignature = signature
-                                showTimeSignatureMenu = false
-                            }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Visual metronome indicator
+        Box(
+            modifier = Modifier
+                .size(200.dp)
+        ) {
+            // Define colors in Composable context
+            val current_beat = Color.Black
+            val beat = Color.White
+            val inactiveColor = Color.White
+            // Draw the beat circles
+            Surface(
+                modifier = Modifier
+                    .clickable { showTimeSignatureMenu = true }
+                    .padding(8.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val radius = size.minDimension / 4
+                    val centerX = size.width / 2
+                    val centerY = size.height / 2
+                    val angleStep = 360f / selectedTimeSignature.numerator
+
+                    for (i in 0 until selectedTimeSignature.numerator) {
+                        val angle = Math.toRadians((i * angleStep).toDouble())
+                        val x = centerX + (radius * 1.5 * kotlin.math.cos(angle)).toFloat()
+                        val y = centerY + (radius * 1.5 * kotlin.math.sin(angle)).toFloat()
+
+                        val isCurrentBeat = i + 1 == currentBeat
+                        val circleRadius =
+                            if (isCurrentBeat) radius * pulseAnimation else radius * 0.4f
+
+                        drawCircle(
+                            color = if (isCurrentBeat) {
+                                if (i == 0) current_beat
+                                else beat
+                            } else {
+                                inactiveColor.copy(alpha = 0.2f)
+                            },
+                            radius = circleRadius,
+                            center = androidx.compose.ui.geometry.Offset(x, y)
                         )
                     }
                 }
             }
+        }
 
-            Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-            // Visual metronome indicator
-            Box(
-                modifier = Modifier
-                    .size(200.dp)
-            )
-            {
-                // Define colors in Composable context
-                val current_beat = Color.Black
-                val beat = Color.White
-                val inactiveColor = Color.White
-                // Draw the beat circles
-                Surface(
-                    modifier = Modifier
-                        .clickable { showTimeSignatureMenu = true }
-                        .padding(8.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val radius = size.minDimension / 4
-                        val centerX = size.width / 2
-                        val centerY = size.height / 2
-                        val angleStep = 360f / selectedTimeSignature.numerator
+        // Display current tempo and beat
+        Text(
+            text = "$tempo BPM | Beat: ${if (isPlaying) "$currentBeat/${selectedTimeSignature.numerator}" else "--"}",
+            color = MaterialTheme.colorScheme.primary,
+            fontSize = 24.sp,
+            modifier = Modifier.padding(vertical = 16.dp)
+        )
 
-                        for (i in 0 until selectedTimeSignature.numerator) {
-                            val angle = Math.toRadians((i * angleStep).toDouble())
-                            val x = centerX + (radius * 1.5 * kotlin.math.cos(angle)).toFloat()
-                            val y = centerY + (radius * 1.5 * kotlin.math.sin(angle)).toFloat()
+        // Play/Pause button
+        Button(
+            onClick = { isPlaying = !isPlaying },
+            modifier = Modifier.width(150.dp),
+        ) {
+            Text(if (isPlaying) "Pause" else "Play",
+                color = Color.White)
+        }
 
-                            val isCurrentBeat = i + 1 == currentBeat
-                            val circleRadius =
-                                if (isCurrentBeat) radius * pulseAnimation else radius * 0.4f
+        Spacer(modifier = Modifier.height(16.dp))
 
-                            drawCircle(
-                                color = if (isCurrentBeat) {
-                                    if (i == 0) current_beat
-                                    else beat
-                                } else {
-                                    inactiveColor.copy(alpha = 0.2f)
-                                },
-                                radius = circleRadius,
-                                center = androidx.compose.ui.geometry.Offset(x, y)
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Display current tempo and beat
-            Text(
-                text = "$tempo BPM | Beat: ${if (isPlaying) "$currentBeat/${selectedTimeSignature.numerator}" else "--"}",
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = 24.sp,
-                modifier = Modifier.padding(vertical = 16.dp)
-            )
-
-            // Play/Pause button
+        // Tempo adjustment controls
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center)
+        {
             Button(
-                onClick = { isPlaying = !isPlaying },
-                modifier = Modifier.width(150.dp),
+                onClick = { if (tempo > 40) tempo-- },
+                modifier = Modifier.width(100.dp)
             ) {
-                Text(if (isPlaying) "Pause" else "Play",
-                    color = Color.White)
+                Text("-1",color = Color.White)
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.width(16.dp))
 
-            // Tempo adjustment controls
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center)
-            {
-                Button(
-                    onClick = { if (tempo > 40) tempo-- },
-                    modifier = Modifier.width(100.dp)
-                ) {
-                    Text("-1",color = Color.White)
-                }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                Button(
-                    onClick = { if (tempo < 220) tempo++ },
-                    modifier = Modifier.width(100.dp)
-                ) {
-                    Text("+1",color = Color.White)
-                }
+            Button(
+                onClick = { if (tempo < 220) tempo++ },
+                modifier = Modifier.width(100.dp)
+            ) {
+                Text("+1",color = Color.White)
             }
+        }
 
-            Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-            // Slider for tempo adjustment
-            Slider(
-                value = tempo.toFloat(),
-                onValueChange = { tempo = it.toInt() },
-                valueRange = 40f..220f,
-                steps = 180,
-                modifier = Modifier.fillMaxWidth()
-            )
+        // Slider for tempo adjustment
+        Slider(
+            value = tempo.toFloat(),
+            onValueChange = { tempo = it.toInt() },
+            valueRange = 40f..220f,
+            steps = 180,
+            modifier = Modifier.fillMaxWidth()
+        )
 
-            Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-            // Manual BPM input
-            BpmInput(
-                manualInput = manualInput,
-                onManualInputChange = {
-                    manualInput = it
-                    it.toIntOrNull()?.let { value ->
-                        if (value in 40..220) {
-                            tempo = value
-                        }
+        // Manual BPM input
+        BpmInput(
+            manualInput = manualInput,
+            onManualInputChange = {
+                manualInput = it
+                it.toIntOrNull()?.let { value ->
+                    if (value in 40..220) {
+                        tempo = value
                     }
-                },
-                focusManager = focusManager,
-                keyboardController = keyboardController
-            )
+                }
+            },
+            focusManager = focusManager,
+            keyboardController = keyboardController
+        )
+    }
+}
+
+// Create a new main app composable with navigation
+@Composable
+fun MetronomeApp() {
+    var currentScreen by remember { mutableStateOf(Screen.Metronome) }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Navigation tabs
+        TabRow(
+            selectedTabIndex = currentScreen.ordinal,
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+        ) {
+            listOf("Metronome", "Settings").forEachIndexed { index, title ->
+                Tab(
+                    selected = currentScreen.ordinal == index,
+                    onClick = { currentScreen = Screen.values()[index] },
+                    text = { Text(title, fontWeight = FontWeight.Bold) }
+                )
+            }
+        }
+
+        // Screen content
+        Box(modifier = Modifier.fillMaxSize()) {
+            when (currentScreen) {
+                Screen.Metronome -> MetronomeScreen()
+                Screen.Settings -> SettingsScreen()
+            }
         }
     }
 }
@@ -425,7 +492,7 @@ fun TempoControllerApp() {
 fun PreviewTempoControllerAppLight() {
     MetronomeTheme {
         Surface {
-            TempoControllerApp()
+            MetronomeApp()
         }
     }
 }
@@ -434,7 +501,7 @@ fun PreviewTempoControllerAppLight() {
 fun PreviewTempoControllerAppDark() {
     MetronomeTheme {
         Surface {
-            TempoControllerApp()
+            MetronomeApp()
         }
     }
 }
