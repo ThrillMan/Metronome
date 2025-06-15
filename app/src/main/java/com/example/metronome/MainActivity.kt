@@ -80,6 +80,23 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.ui.text.style.TextAlign
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.OutputStream
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 
 // Database Entity
 @Entity(tableName = "songs")
@@ -201,13 +218,298 @@ class SongViewModelFactory(private val repository: SongRepository) : ViewModelPr
     }
 }
 
+val MetronomeIcon: ImageVector = ImageVector.Builder(
+    name = "Metronome",
+    defaultWidth = 120.dp,
+    defaultHeight = 120.dp,
+    viewportWidth = 120f,
+    viewportHeight = 120f
+).apply {
+    // Metronome base
+    path(
+        fill = androidx.compose.ui.graphics.SolidColor(Color(0xFF1976D2)),
+        stroke = null
+    ) {
+        moveTo(20f, 100f)
+        lineTo(100f, 100f)
+        lineTo(95f, 110f)
+        lineTo(25f, 110f)
+        close()
+    }
+
+    // Metronome body (trapezoid)
+    path(
+        fill = androidx.compose.ui.graphics.SolidColor(Color(0xFF2196F3)),
+        stroke = null
+    ) {
+        moveTo(30f, 100f)
+        lineTo(90f, 100f)
+        lineTo(70f, 20f)
+        lineTo(50f, 20f)
+        close()
+    }
+
+    // Metronome arm (pendulum)
+    path(
+        fill = androidx.compose.ui.graphics.SolidColor(Color(0xFF0D47A1)),
+        stroke = null,
+        strokeLineWidth = 3f
+    ) {
+        moveTo(60f, 25f)
+        lineTo(60f, 85f)
+        moveTo(55f, 30f)
+        lineTo(65f, 30f)
+        lineTo(65f, 35f)
+        lineTo(55f, 35f)
+        close()
+    }
+
+    // Weight on pendulum
+    path(
+        fill = androidx.compose.ui.graphics.SolidColor(Color(0xFFFF9800)),
+        stroke = null
+    ) {
+        moveTo(55f, 45f)
+        lineTo(65f, 45f)
+        lineTo(65f, 55f)
+        lineTo(55f, 55f)
+        close()
+    }
+
+    // Center pivot
+    path(
+        fill = androidx.compose.ui.graphics.SolidColor(Color(0xFF424242)),
+        stroke = null
+    ) {
+        moveTo(58f, 23f)
+        lineTo(62f, 23f)
+        lineTo(62f, 27f)
+        lineTo(58f, 27f)
+        close()
+    }
+}.build()
+
+// Splash Screen Composable
+@Composable
+fun SplashScreen(onSplashComplete: () -> Unit) {
+    var startAnimation by remember { mutableStateOf(false) }
+
+    // Animation values
+    val logoScale by animateFloatAsState(
+        targetValue = if (startAnimation) 1f else 0.3f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "logo_scale"
+    )
+
+    val logoAlpha by animateFloatAsState(
+        targetValue = if (startAnimation) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = 1000,
+            easing = FastOutSlowInEasing
+        ),
+        label = "logo_alpha"
+    )
+
+    val textAlpha by animateFloatAsState(
+        targetValue = if (startAnimation) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = 1200,
+            delayMillis = 500,
+            easing = FastOutSlowInEasing
+        ),
+        label = "text_alpha"
+    )
+
+    // Pendulum swing animation
+    val infiniteTransition = rememberInfiniteTransition(label = "pendulum")
+    val pendulumRotation by infiniteTransition.animateFloat(
+        initialValue = -15f,
+        targetValue = 15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 1000,
+                easing = LinearEasing
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pendulum_rotation"
+    )
+
+    // Gradient background
+    val gradientBrush = Brush.verticalGradient(
+        colors = listOf(
+            Color(0xFF1A237E),
+            Color(0xFF3F51B5),
+            Color(0xFF5C6BC0)
+        )
+    )
+
+    LaunchedEffect(Unit) {
+        startAnimation = true
+        delay(3000) // Show splash for 3 seconds
+        onSplashComplete()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(gradientBrush),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Logo with pendulum animation
+            Box(
+                modifier = Modifier
+                    .size(200.dp)
+                    .scale(logoScale)
+                    .alpha(logoAlpha)
+                    .rotate(if (startAnimation) pendulumRotation else 0f),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = rememberVectorPainter(MetronomeIcon),
+                    contentDescription = "Metronome Logo",
+                    modifier = Modifier.size(120.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // App name with fade-in
+            Text(
+                text = "METRONOME",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.alpha(textAlpha)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Keep the Beat",
+                fontSize = 16.sp,
+                color = Color.White.copy(alpha = 0.8f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.alpha(textAlpha)
+            )
+
+            Spacer(modifier = Modifier.height(48.dp))
+
+            // Loading indicator
+            if (startAnimation) {
+                CircularProgressIndicator(
+                    color = Color.White,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .alpha(textAlpha)
+                )
+            }
+        }
+
+        // Musical notes floating animation
+        MusicNotesAnimation(
+            modifier = Modifier.fillMaxSize(),
+            alpha = textAlpha
+        )
+    }
+}
+
+@Composable
+fun MusicNotesAnimation(
+    modifier: Modifier = Modifier,
+    alpha: Float = 1f
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "music_notes")
+
+    // Multiple floating notes with different timings
+    val notes = remember {
+        listOf(
+            FloatingNote(0.2f, 0.1f, 8000),
+            FloatingNote(0.8f, 0.2f, 10000),
+            FloatingNote(0.1f, 0.9f, 12000),
+            FloatingNote(0.9f, 0.8f, 9000),
+            FloatingNote(0.5f, 0.3f, 11000)
+        )
+    }
+
+    Box(modifier = modifier) {
+        notes.forEach { note ->
+            val yOffset by infiniteTransition.animateFloat(
+                initialValue = note.startY,
+                targetValue = note.startY - 0.3f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(
+                        durationMillis = note.duration,
+                        easing = LinearEasing
+                    ),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "note_${note.startX}"
+            )
+
+            val noteAlpha by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = note.duration
+                        0f at 0
+                        1f at (note.duration * 0.2f).toInt()
+                        1f at (note.duration * 0.8f).toInt()
+                        0f at note.duration
+                    }
+                ),
+                label = "note_alpha_${note.startX}"
+            )
+
+            Text(
+                text = "♪",
+                fontSize = 24.sp,
+                color = Color.White,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .wrapContentSize()
+                    .offset(
+                        x = (note.startX * 300).dp,
+                        y = (yOffset * 600).dp
+                    )
+                    .alpha(alpha * noteAlpha * 0.6f)
+            )
+        }
+    }
+}
+
+data class FloatingNote(
+    val startX: Float,
+    val startY: Float,
+    val duration: Int
+)
+
+// Updated MainActivity to include splash screen
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             MetronomeTheme {
+                var showSplash by remember { mutableStateOf(true) }
+
                 Surface {
-                    MetronomeApp()
+                    if (showSplash) {
+                        SplashScreen {
+                            showSplash = false
+                        }
+                    } else {
+                        MetronomeApp()
+                    }
                 }
             }
         }
@@ -518,21 +820,7 @@ data class TimeSignature(val numerator: Int, val denominator: Int) {
     override fun toString(): String = "$numerator/$denominator"
 }
 
-// ... Sound related code remains the same ...
-@Composable
-fun rememberSoundState(): SoundState {
-    val context = LocalContext.current
-    val isInPreview = LocalInspectionMode.current
-    val soundState = remember { SoundState() }
-
-    LaunchedEffect(Unit) {
-        if (!isInPreview) { // Only initialize in real app
-            soundState.init(context)
-        }
-    }
-
-    return soundState
-}
+// Updated SoundState class with proper implementation
 @Stable
 class SoundState {
     private var soundPool: SoundPool? = null
@@ -549,25 +837,118 @@ class SoundState {
             .apply {
                 setOnLoadCompleteListener { _, _, status ->
                     if (status == 0) loaded = true
+                    Log.d("SoundState", "Sound loaded with status: $status")
                 }
 
-                // Load sounds
-                // NOTE: Make sure you have beat.wav and downbeat.wav in your res/raw folder
-                // beatSoundId = load(context, R.raw.beat, 1)
-                // downbeatSoundId = load(context, R.raw.downbeat, 1)
+                // Load actual sound files - you need these in res/raw/
+                try {
+                    beatSoundId = load(context, R.raw.beat, 1)
+                    downbeatSoundId = load(context, R.raw.downbeat, 1)
+                    Log.d("SoundState", "Sound files loaded - beat: $beatSoundId, downbeat: $downbeatSoundId")
+                } catch (e: Exception) {
+                    Log.e("SoundState", "Failed to load sound files", e)
+                    // Fallback: create synthetic sounds
+                    createSyntheticSounds(context)
+                }
             }
     }
 
+    private fun createSyntheticSounds(context: Context) {
+        // Create temporary WAV files for beat sounds
+        try {
+            val beatFile = createTempSoundFile(context, "beat", 800) // 800Hz tone
+            val downbeatFile = createTempSoundFile(context, "downbeat", 1200) // 1200Hz tone
+
+            beatSoundId = soundPool?.load(beatFile.absolutePath, 1) ?: 0
+            downbeatSoundId = soundPool?.load(downbeatFile.absolutePath, 1) ?: 0
+
+            Log.d("SoundState", "Synthetic sounds created")
+        } catch (e: Exception) {
+            Log.e("SoundState", "Failed to create synthetic sounds", e)
+        }
+    }
+
+    private fun createTempSoundFile(context: Context, name: String, frequency: Int): File {
+        val file = File(context.cacheDir, "$name.wav")
+        val sampleRate = 44100
+        val duration = 0.1 // 100ms
+        val numSamples = (duration * sampleRate).toInt()
+        val samples = ShortArray(numSamples)
+
+        // Generate sine wave
+        for (i in 0 until numSamples) {
+            val sample = (Math.sin(2 * Math.PI * i * frequency / sampleRate) * Short.MAX_VALUE * 0.5).toInt()
+            samples[i] = sample.toShort()
+        }
+
+        // Write WAV file
+        file.outputStream().use { output ->
+            writeWavHeader(output, numSamples, sampleRate)
+            val buffer = ByteArray(numSamples * 2)
+            for (i in samples.indices) {
+                buffer[i * 2] = (samples[i].toInt() and 0xff).toByte()
+                buffer[i * 2 + 1] = ((samples[i].toInt() shr 8) and 0xff).toByte()
+            }
+            output.write(buffer)
+        }
+
+        return file
+    }
+
+    private fun writeWavHeader(output: OutputStream, numSamples: Int, sampleRate: Int) {
+        val dataSize = numSamples * 2
+        val fileSize = dataSize + 36
+
+        output.write("RIFF".toByteArray())
+        output.write(intToByteArray(fileSize))
+        output.write("WAVE".toByteArray())
+        output.write("fmt ".toByteArray())
+        output.write(intToByteArray(16)) // fmt chunk size
+        output.write(shortToByteArray(1)) // audio format (PCM)
+        output.write(shortToByteArray(1)) // num channels
+        output.write(intToByteArray(sampleRate))
+        output.write(intToByteArray(sampleRate * 2)) // byte rate
+        output.write(shortToByteArray(2)) // block align
+        output.write(shortToByteArray(16)) // bits per sample
+        output.write("data".toByteArray())
+        output.write(intToByteArray(dataSize))
+    }
+
+    private fun intToByteArray(value: Int): ByteArray {
+        return byteArrayOf(
+            (value and 0xff).toByte(),
+            ((value shr 8) and 0xff).toByte(),
+            ((value shr 16) and 0xff).toByte(),
+            ((value shr 24) and 0xff).toByte()
+        )
+    }
+
+    private fun shortToByteArray(value: Short): ByteArray {
+        return byteArrayOf(
+            (value.toInt() and 0xff).toByte(),
+            ((value.toInt() shr 8) and 0xff).toByte()
+        )
+    }
+
     fun playBeat(isDownbeat: Boolean) {
-        if (!loaded) return
-        val pool = soundPool ?: return
+        val pool = soundPool
+        if (pool == null || !loaded) {
+            Log.w("SoundState", "Sound not ready - pool: $pool, loaded: $loaded")
+            return
+        }
 
         val soundId = if (isDownbeat) downbeatSoundId else beatSoundId
 
+        if (soundId == 0) {
+            Log.w("SoundState", "Sound ID is 0 - not loaded properly")
+            return
+        }
+
         try {
-            pool.play(soundId, 1f, 1f, 1, 0, 1f)
+            val result = pool.play(soundId, 1f, 1f, 1, 0, 1f)
+            Log.d("SoundState", "Played sound - ID: $soundId, result: $result, isDownbeat: $isDownbeat")
         } catch (e: Exception) {
-            // Ignore in preview
+            Log.e("SoundState", "Failed to play sound", e)
         }
     }
 
@@ -575,9 +956,108 @@ class SoundState {
         soundPool?.release()
         soundPool = null
         loaded = false
+        beatSoundId = 0
+        downbeatSoundId = 0
+        Log.d("SoundState", "Sound resources released")
     }
 }
 
+// Alternative: Simple ToneGenerator-based implementation
+@Stable
+class SimpleSoundState {
+    private var toneGenerator: android.media.ToneGenerator? = null
+    private var initialized = false
+
+    fun init(context: Context) {
+        if (initialized) return
+
+        try {
+            toneGenerator = android.media.ToneGenerator(
+                android.media.AudioManager.STREAM_MUSIC,
+                80 // Volume (0-100)
+            )
+            initialized = true
+            Log.d("SimpleSoundState", "ToneGenerator initialized")
+        } catch (e: Exception) {
+            Log.e("SimpleSoundState", "Failed to initialize ToneGenerator", e)
+        }
+    }
+
+    fun playBeat(isDownbeat: Boolean) {
+        if (!initialized) {
+            Log.w("SimpleSoundState", "Not initialized")
+            return
+        }
+
+        try {
+            val tone = if (isDownbeat) {
+                android.media.ToneGenerator.TONE_PROP_BEEP2 // Higher pitch for downbeat
+            } else {
+                android.media.ToneGenerator.TONE_PROP_BEEP // Regular beat
+            }
+
+            toneGenerator?.startTone(tone, 100) // 100ms duration
+            Log.d("SimpleSoundState", "Played tone - isDownbeat: $isDownbeat")
+        } catch (e: Exception) {
+            Log.e("SimpleSoundState", "Failed to play tone", e)
+        }
+    }
+
+    fun release() {
+        toneGenerator?.release()
+        toneGenerator = null
+        initialized = false
+        Log.d("SimpleSoundState", "ToneGenerator released")
+    }
+}
+
+// Updated rememberSoundState composable
+@Composable
+fun rememberSoundState(): SoundState {
+    val context = LocalContext.current
+    val isInPreview = LocalInspectionMode.current
+    val soundState = remember { SoundState() }
+
+    LaunchedEffect(Unit) {
+        if (!isInPreview) {
+            soundState.init(context)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            if (!isInPreview) {
+                soundState.release()
+            }
+        }
+    }
+
+    return soundState
+}
+
+// Alternative simple sound composable
+@Composable
+fun rememberSimpleSoundState(): SimpleSoundState {
+    val context = LocalContext.current
+    val isInPreview = LocalInspectionMode.current
+    val soundState = remember { SimpleSoundState() }
+
+    LaunchedEffect(Unit) {
+        if (!isInPreview) {
+            soundState.init(context)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            if (!isInPreview) {
+                soundState.release()
+            }
+        }
+    }
+
+    return soundState
+}
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MetronomeScreen(
@@ -770,7 +1250,9 @@ fun MetronomeApp() {
                 Tab(
                     selected = currentScreen.ordinal == index,
                     onClick = { currentScreen = Screen.values()[index] },
-                    text = { Text(title, fontWeight = FontWeight.Bold) }
+                    text = { Text(title, fontWeight = FontWeight.Bold) },
+                    modifier = Modifier.statusBarsPadding() // Automatically adds padding for status bar
+                        .padding(top = 8.dp) // Additional padding if needed
                 )
             }
         }
