@@ -104,8 +104,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollbarStyle
+import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.draw.alpha
@@ -703,7 +707,7 @@ fun MetronomeHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(4.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1518,6 +1522,9 @@ fun MetronomeScreen(
 
     Column(
         modifier = Modifier.fillMaxSize()
+            .padding(start = 32.dp, end = 32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Header with animated logo
         MetronomeHeader(
@@ -1526,15 +1533,34 @@ fun MetronomeScreen(
             currentBeat = currentBeat,
             maxBeats = selectedTimeSignature.numerator
         )
+        val configuration = LocalConfiguration.current
+        val screenWidth = configuration.screenWidthDp.dp
+        val canvasWidth = screenWidth * 0.8f
+        Canvas(
+            modifier = Modifier.size(canvasWidth)
+        ){
+            drawMetronomeDots(
+                isPlaying = isPlaying,
+                currentBeat = currentBeat,
+                maxBeats = selectedTimeSignature.numerator
+            )}
 
         // Rest of the metronome interface
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(32.dp),
+                .padding(start = 32.dp, end = 32.dp)
+                .verticalScroll(
+                    state = rememberScrollState(),
+                    flingBehavior = ScrollableDefaults.flingBehavior(),
+                    enabled = true
+                ),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+
+
+            Spacer(modifier = Modifier.height(16.dp))
             Box {
                 Surface(
                     modifier = Modifier.clickable { showTimeSignatureMenu = true }.padding(8.dp),
@@ -1563,24 +1589,6 @@ fun MetronomeScreen(
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            val configuration = LocalConfiguration.current
-            val screenWidth = configuration.screenWidthDp.dp
-            val canvasWidth = screenWidth * 0.8f
-
-            Canvas(
-                modifier = Modifier.size(canvasWidth)
-            ){
-            drawMetronomeDots(
-                isPlaying = isPlaying,
-                currentBeat = currentBeat,
-                maxBeats = selectedTimeSignature.numerator
-            )}
-
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             Text(
                 text = "$tempo BPM | Beat: ${if (isPlaying) "$currentBeat/${selectedTimeSignature.numerator}" else "--"}",
                 color = MaterialTheme.colorScheme.primary,
