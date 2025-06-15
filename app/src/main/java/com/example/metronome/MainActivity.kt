@@ -116,6 +116,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.*
@@ -666,21 +667,21 @@ private fun DrawScope.drawMetronomeCompact(
         )
     }
 
-    // Beat indicators (small dots around the logo)
-    if (isPlaying) {
-        val radius = size.width * 0.45f
-        for (i in 1..maxBeats) {
-            val angle = (i - 1) * (360f / maxBeats) - 90f
-            val x = centerX + cos(Math.toRadians(angle.toDouble())).toFloat() * radius
-            val y = centerY + sin(Math.toRadians(angle.toDouble())).toFloat() * radius
-
-            drawCircle(
-                color = if (i == currentBeat) activeColor else primaryColor.copy(alpha = 0.3f),
-                radius = if (i == currentBeat) 4.dp.toPx() else 2.dp.toPx(),
-                center = Offset(x, y)
-            )
-        }
-    }
+//    // Beat indicators (small dots around the logo)
+//    if (isPlaying) {
+//        val radius = size.width * 0.45f
+//        for (i in 1..maxBeats) {
+//            val angle = (i - 1) * (360f / maxBeats) - 90f
+//            val x = centerX + cos(Math.toRadians(angle.toDouble())).toFloat() * radius
+//            val y = centerY + sin(Math.toRadians(angle.toDouble())).toFloat() * radius
+//
+//            drawCircle(
+//                color = if (i == currentBeat) activeColor else primaryColor.copy(alpha = 0.3f),
+//                radius = if (i == currentBeat) 4.dp.toPx() else 2.dp.toPx(),
+//                center = Offset(x, y)
+//            )
+//        }
+//    }
 
     // Center pivot
     drawCircle(
@@ -1409,6 +1410,60 @@ fun rememberSimpleSoundState(): SimpleSoundState {
 
     return soundState
 }
+private fun DrawScope.drawMetronomeDots(
+    isPlaying: Boolean,
+    currentBeat: Int,
+    maxBeats: Int
+) {
+    val centerX = size.width / 2
+    val centerY = size.height / 2
+    val baseWidth = size.width * 0.6f
+    val height = size.height * 0.8f
+
+    // Color scheme
+    val primaryColor = Color(0xFF1976D2)
+    val accentColor = Color(0xFF2196F3)
+    val activeColor = Color(0xFFFF5722)
+    val backgroundGrad = Brush.verticalGradient(
+        colors = listOf(
+            primaryColor.copy(alpha = 0.1f),
+            accentColor.copy(alpha = 0.05f)
+        )
+    )
+
+
+
+    // Beat indicators (small dots around the logo)
+    if (isPlaying) {
+        val radius = size.width * 0.45f
+        for (i in 1..maxBeats) {
+            val angle = (i - 1) * (360f / maxBeats) - 90f
+            val x = centerX + cos(Math.toRadians(angle.toDouble())).toFloat() * radius
+            val y = centerY + sin(Math.toRadians(angle.toDouble())).toFloat() * radius
+
+            drawCircle(
+                color = if (i == currentBeat) activeColor else primaryColor.copy(alpha = 0.3f),
+                radius = if (i == currentBeat) 10.dp.toPx() else 4.dp.toPx(),
+                center = Offset(x, y)
+            )
+        }
+    }
+    else{
+        val radius = size.width * 0.45f
+        for (i in 1..maxBeats) {
+            val angle = (i - 1) * (360f / maxBeats) - 90f
+            val x = centerX + cos(Math.toRadians(angle.toDouble())).toFloat() * radius
+            val y = centerY + sin(Math.toRadians(angle.toDouble())).toFloat() * radius
+
+            drawCircle(
+                color = primaryColor.copy(alpha = 0.3f),
+                radius = 6.dp.toPx(),
+                center = Offset(x, y)
+            )
+        }
+    }
+
+}
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MetronomeScreen(
@@ -1510,40 +1565,19 @@ fun MetronomeScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+            val configuration = LocalConfiguration.current
+            val screenWidth = configuration.screenWidthDp.dp
+            val canvasWidth = screenWidth * 0.8f
 
-            Box(modifier = Modifier.size(200.dp)) {
-                val current_beat = Color.Black
-                val beat = Color.White
-                val inactiveColor = Color.White
-                Surface(
-                    modifier = Modifier.padding(8.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val radius = size.minDimension / 4
-                        val centerX = size.width / 2
-                        val centerY = size.height / 2
-                        val angleStep = 360f / selectedTimeSignature.numerator
-                        for (i in 0 until selectedTimeSignature.numerator) {
-                            val angle = Math.toRadians((i * angleStep).toDouble())
-                            val x = centerX + (radius * 1.5 * kotlin.math.cos(angle)).toFloat()
-                            val y = centerY + (radius * 1.5 * kotlin.math.sin(angle)).toFloat()
-                            val isCurrentBeat = i + 1 == currentBeat
-                            val circleRadius = if (isCurrentBeat) radius * pulseAnimation else radius * 0.4f
-                            drawCircle(
-                                color = if (isCurrentBeat) {
-                                    if (i == 0) current_beat else beat
-                                } else {
-                                    inactiveColor.copy(alpha = 0.2f)
-                                },
-                                radius = circleRadius,
-                                center = androidx.compose.ui.geometry.Offset(x, y)
-                            )
-                        }
-                    }
-                }
-            }
+            Canvas(
+                modifier = Modifier.size(canvasWidth)
+            ){
+            drawMetronomeDots(
+                isPlaying = isPlaying,
+                currentBeat = currentBeat,
+                maxBeats = selectedTimeSignature.numerator
+            )}
+
 
             Spacer(modifier = Modifier.height(16.dp))
 
