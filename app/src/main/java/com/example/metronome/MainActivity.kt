@@ -39,6 +39,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.ui.input.key.onKeyEvent
 import android.view.KeyEvent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -97,6 +98,28 @@ import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlin.math.*
+
 
 // Database Entity
 @Entity(tableName = "songs")
@@ -493,6 +516,334 @@ data class FloatingNote(
     val startY: Float,
     val duration: Int
 )
+
+@Composable
+fun HomeScreenLogo(
+    modifier: Modifier = Modifier,
+    isPlaying: Boolean = false,
+    tempo: Int = 120,
+    currentBeat: Int = 0,
+    maxBeats: Int = 4
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "home_logo")
+
+    // Pendulum swing based on tempo and play state
+    val pendulumAngle by infiniteTransition.animateFloat(
+        initialValue = -15f,
+        targetValue = 15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = if (isPlaying) (60000 / tempo) else 2000,
+                easing = if (isPlaying) LinearEasing else EaseInOutSine
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pendulum_swing"
+    )
+
+    // Gentle breathing animation when not playing
+    val breathingScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 3000,
+                easing = EaseInOutSine
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "breathing"
+    )
+
+    // Beat pulse animation
+    val beatPulse by animateFloatAsState(
+        targetValue = if (isPlaying && currentBeat > 0) 1.2f else 1f,
+        animationSpec = tween(
+            durationMillis = 100,
+            easing = FastOutLinearInEasing
+        ),
+        label = "beat_pulse"
+    )
+
+    val scale = if (isPlaying) beatPulse else breathingScale
+
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(
+            modifier = Modifier
+                .size(80.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+        ) {
+            drawMetronomeCompact(
+                pendulumAngle = pendulumAngle,
+                isPlaying = isPlaying,
+                currentBeat = currentBeat,
+                maxBeats = maxBeats
+            )
+        }
+    }
+}
+
+// Minimalist metronome drawing for home screen
+private fun DrawScope.drawMetronomeCompact(
+    pendulumAngle: Float,
+    isPlaying: Boolean,
+    currentBeat: Int,
+    maxBeats: Int
+) {
+    val centerX = size.width / 2
+    val centerY = size.height / 2
+    val baseWidth = size.width * 0.6f
+    val height = size.height * 0.8f
+
+    // Color scheme
+    val primaryColor = Color(0xFF1976D2)
+    val accentColor = Color(0xFF2196F3)
+    val activeColor = Color(0xFFFF5722)
+    val backgroundGrad = Brush.verticalGradient(
+        colors = listOf(
+            primaryColor.copy(alpha = 0.1f),
+            accentColor.copy(alpha = 0.05f)
+        )
+    )
+
+    // Base
+    drawRoundRect(
+        brush = SolidColor(primaryColor),
+        topLeft = Offset(centerX - baseWidth * 0.4f, centerY + height * 0.3f),
+        size = Size(baseWidth * 0.8f, height * 0.1f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx())
+    )
+
+    // Body (simplified trapezoid)
+    val bodyPath = Path().apply {
+        moveTo(centerX - baseWidth * 0.25f, centerY + height * 0.3f)
+        lineTo(centerX + baseWidth * 0.25f, centerY + height * 0.3f)
+        lineTo(centerX + baseWidth * 0.15f, centerY - height * 0.3f)
+        lineTo(centerX - baseWidth * 0.15f, centerY - height * 0.3f)
+        close()
+    }
+
+    drawPath(
+        path = bodyPath,
+        brush = backgroundGrad
+    )
+
+    drawPath(
+        path = bodyPath,
+        color = accentColor,
+        style = Stroke(width = 2.dp.toPx())
+    )
+
+    // Pendulum with rotation
+    rotate(degrees = pendulumAngle, pivot = Offset(centerX, centerY - height * 0.25f)) {
+        // Pendulum rod
+        drawLine(
+            color = if (isPlaying) activeColor else primaryColor,
+            start = Offset(centerX, centerY - height * 0.25f),
+            end = Offset(centerX, centerY + height * 0.15f),
+            strokeWidth = 3.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+
+        // Weight
+        drawCircle(
+            color = if (isPlaying) activeColor else Color(0xFFFF9800),
+            radius = 8.dp.toPx(),
+            center = Offset(centerX, centerY - height * 0.05f)
+        )
+
+        // Highlight on weight
+        drawCircle(
+            color = Color.White.copy(alpha = 0.3f),
+            radius = 3.dp.toPx(),
+            center = Offset(centerX - 2.dp.toPx(), centerY - height * 0.05f - 2.dp.toPx())
+        )
+    }
+
+    // Beat indicators (small dots around the logo)
+    if (isPlaying) {
+        val radius = size.width * 0.45f
+        for (i in 1..maxBeats) {
+            val angle = (i - 1) * (360f / maxBeats) - 90f
+            val x = centerX + cos(Math.toRadians(angle.toDouble())).toFloat() * radius
+            val y = centerY + sin(Math.toRadians(angle.toDouble())).toFloat() * radius
+
+            drawCircle(
+                color = if (i == currentBeat) activeColor else primaryColor.copy(alpha = 0.3f),
+                radius = if (i == currentBeat) 4.dp.toPx() else 2.dp.toPx(),
+                center = Offset(x, y)
+            )
+        }
+    }
+
+    // Center pivot
+    drawCircle(
+        color = Color(0xFF424242),
+        radius = 3.dp.toPx(),
+        center = Offset(centerX, centerY - height * 0.25f)
+    )
+}
+
+// Header component with logo and app title
+@Composable
+fun MetronomeHeader(
+    modifier: Modifier = Modifier,
+    isPlaying: Boolean = false,
+    tempo: Int = 120,
+    currentBeat: Int = 0,
+    maxBeats: Int = 4
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        HomeScreenLogo(
+            isPlaying = isPlaying,
+            tempo = tempo,
+            currentBeat = currentBeat,
+            maxBeats = maxBeats
+        )
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "METRONOME",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
+
+            AnimatedVisibility(
+                visible = isPlaying,
+                enter = fadeIn() + slideInVertically(),
+                exit = fadeOut() + slideOutVertically()
+            ) {
+                Text(
+                    text = "♪ $tempo BPM ♪",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+// Floating compact logo for corner placement
+@Composable
+fun FloatingMetronomeLogo(
+    modifier: Modifier = Modifier,
+    isPlaying: Boolean = false,
+    tempo: Int = 120,
+    size: androidx.compose.ui.unit.Dp = 40.dp
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "floating_logo")
+
+    val pendulumAngle by infiniteTransition.animateFloat(
+        initialValue = -10f,
+        targetValue = 10f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = if (isPlaying) (60000 / tempo) else 2000,
+                easing = if (isPlaying) LinearEasing else EaseInOutSine
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "floating_pendulum"
+    )
+
+    val floatingOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 4f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 2000,
+                easing = EaseInOutSine
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "floating_movement"
+    )
+
+    Card(
+        modifier = modifier
+            .size(size)
+            .offset(y = floatingOffset.dp),
+        shape = CircleShape,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(
+                modifier = Modifier.size(size * 0.7f)
+            ) {
+                drawMetronomeIcon(
+                    pendulumAngle = pendulumAngle,
+                    isPlaying = isPlaying
+                )
+            }
+        }
+    }
+}
+
+// Simple icon version for floating logo
+private fun DrawScope.drawMetronomeIcon(
+    pendulumAngle: Float,
+    isPlaying: Boolean
+) {
+    val centerX = size.width / 2
+    val centerY = size.height / 2
+    val scale = 0.6f
+
+    // Simple body
+    val bodyPath = Path().apply {
+        moveTo(centerX - size.width * 0.2f * scale, centerY + size.height * 0.3f * scale)
+        lineTo(centerX + size.width * 0.2f * scale, centerY + size.height * 0.3f * scale)
+        lineTo(centerX + size.width * 0.1f * scale, centerY - size.height * 0.3f * scale)
+        lineTo(centerX - size.width * 0.1f * scale, centerY - size.height * 0.3f * scale)
+        close()
+    }
+
+    drawPath(
+        path = bodyPath,
+        color = Color(0xFF1976D2)
+    )
+
+    // Pendulum
+    rotate(degrees = pendulumAngle, pivot = Offset(centerX, centerY - size.height * 0.2f * scale)) {
+        drawLine(
+            color = if (isPlaying) Color(0xFFFF5722) else Color(0xFF0D47A1),
+            start = Offset(centerX, centerY - size.height * 0.2f * scale),
+            end = Offset(centerX, centerY + size.height * 0.1f * scale),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+
+        drawCircle(
+            color = Color(0xFFFF9800),
+            radius = 3.dp.toPx(),
+            center = Offset(centerX, centerY)
+        )
+    }
+}
 
 // Updated MainActivity to include splash screen
 class MainActivity : ComponentActivity() {
@@ -1061,7 +1412,6 @@ fun rememberSimpleSoundState(): SimpleSoundState {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MetronomeScreen(
-    // Accept state from the parent
     tempo: Int,
     onTempoChange: (Int) -> Unit,
     selectedTimeSignature: TimeSignature,
@@ -1077,10 +1427,12 @@ fun MetronomeScreen(
         TimeSignature(5, 4), TimeSignature(6, 8), TimeSignature(7, 8),
         TimeSignature(12, 8)
     )
+
     val pulseAnimation by animateFloatAsState(
         targetValue = if (isPlaying) 0.5f else 0.4f,
         animationSpec = tween(durationMillis = 100), label = "pulse"
     )
+
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val soundState = rememberSoundState()
@@ -1091,11 +1443,13 @@ fun MetronomeScreen(
             soundState.playBeat(currentBeat == 1)
         }
     }
+
     DisposableEffect(Unit) {
         onDispose {
             if (!isInPreview) { soundState.release() }
         }
     }
+
     LaunchedEffect(isPlaying, tempo, selectedTimeSignature) {
         if (!isPlaying) {
             currentBeat = 0
@@ -1108,127 +1462,143 @@ fun MetronomeScreen(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier.fillMaxSize()
     ) {
-        Box {
-            Surface(
-                modifier = Modifier.clickable { showTimeSignatureMenu = true }.padding(8.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Text(
-                    text = selectedTimeSignature.toString(),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    fontSize = 24.sp,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-            DropdownMenu(
-                expanded = showTimeSignatureMenu,
-                onDismissRequest = { showTimeSignatureMenu = false }
-            ) {
-                commonTimeSignatures.forEach { signature ->
-                    DropdownMenuItem(
-                        text = { Text(text = signature.toString(), color = MaterialTheme.colorScheme.onPrimaryContainer) },
-                        onClick = {
-                            onTimeSignatureChange(signature) // Use callback
-                            showTimeSignatureMenu = false
-                        }
+        // Header with animated logo
+        MetronomeHeader(
+            isPlaying = isPlaying,
+            tempo = tempo,
+            currentBeat = currentBeat,
+            maxBeats = selectedTimeSignature.numerator
+        )
+
+        // Rest of the metronome interface
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box {
+                Surface(
+                    modifier = Modifier.clickable { showTimeSignatureMenu = true }.padding(8.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Text(
+                        text = selectedTimeSignature.toString(),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontSize = 24.sp,
+                        modifier = Modifier.padding(16.dp)
                     )
                 }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Box(modifier = Modifier.size(200.dp)) {
-            val current_beat = Color.Black
-            val beat = Color.White
-            val inactiveColor = Color.White
-            Surface(
-                modifier = Modifier.padding(8.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val radius = size.minDimension / 4
-                    val centerX = size.width / 2
-                    val centerY = size.height / 2
-                    val angleStep = 360f / selectedTimeSignature.numerator
-                    for (i in 0 until selectedTimeSignature.numerator) {
-                        val angle = Math.toRadians((i * angleStep).toDouble())
-                        val x = centerX + (radius * 1.5 * kotlin.math.cos(angle)).toFloat()
-                        val y = centerY + (radius * 1.5 * kotlin.math.sin(angle)).toFloat()
-                        val isCurrentBeat = i + 1 == currentBeat
-                        val circleRadius = if (isCurrentBeat) radius * pulseAnimation else radius * 0.4f
-                        drawCircle(
-                            color = if (isCurrentBeat) {
-                                if (i == 0) current_beat else beat
-                            } else {
-                                inactiveColor.copy(alpha = 0.2f)
-                            },
-                            radius = circleRadius,
-                            center = androidx.compose.ui.geometry.Offset(x, y)
+                DropdownMenu(
+                    expanded = showTimeSignatureMenu,
+                    onDismissRequest = { showTimeSignatureMenu = false }
+                ) {
+                    commonTimeSignatures.forEach { signature ->
+                        DropdownMenuItem(
+                            text = { Text(text = signature.toString(), color = MaterialTheme.colorScheme.onPrimaryContainer) },
+                            onClick = {
+                                onTimeSignatureChange(signature)
+                                showTimeSignatureMenu = false
+                            }
                         )
                     }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "$tempo BPM | Beat: ${if (isPlaying) "$currentBeat/${selectedTimeSignature.numerator}" else "--"}",
-            color = MaterialTheme.colorScheme.primary,
-            fontSize = 24.sp,
-            modifier = Modifier.padding(vertical = 16.dp)
-        )
-
-        Button(onClick = { isPlaying = !isPlaying }, modifier = Modifier.width(150.dp)) {
-            Text(if (isPlaying) "Pause" else "Play", color = Color.White)
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            Button(onClick = { if (tempo > 40) onTempoChange(tempo - 1) }, modifier = Modifier.width(100.dp)) {
-                Text("-1", color = Color.White)
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Button(onClick = { if (tempo < 220) onTempoChange(tempo + 1) }, modifier = Modifier.width(100.dp)) {
-                Text("+1", color = Color.White)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Slider(
-            value = tempo.toFloat(),
-            onValueChange = { onTempoChange(it.toInt()) }, // Use callback
-            valueRange = 40f..220f,
-            steps = 180,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        BpmInput(
-            manualInput = manualInput,
-            onManualInputChange = {
-                manualInput = it
-                it.toIntOrNull()?.let { value ->
-                    if (value in 40..220) {
-                        onTempoChange(value) // Use callback
+            Box(modifier = Modifier.size(200.dp)) {
+                val current_beat = Color.Black
+                val beat = Color.White
+                val inactiveColor = Color.White
+                Surface(
+                    modifier = Modifier.padding(8.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val radius = size.minDimension / 4
+                        val centerX = size.width / 2
+                        val centerY = size.height / 2
+                        val angleStep = 360f / selectedTimeSignature.numerator
+                        for (i in 0 until selectedTimeSignature.numerator) {
+                            val angle = Math.toRadians((i * angleStep).toDouble())
+                            val x = centerX + (radius * 1.5 * kotlin.math.cos(angle)).toFloat()
+                            val y = centerY + (radius * 1.5 * kotlin.math.sin(angle)).toFloat()
+                            val isCurrentBeat = i + 1 == currentBeat
+                            val circleRadius = if (isCurrentBeat) radius * pulseAnimation else radius * 0.4f
+                            drawCircle(
+                                color = if (isCurrentBeat) {
+                                    if (i == 0) current_beat else beat
+                                } else {
+                                    inactiveColor.copy(alpha = 0.2f)
+                                },
+                                radius = circleRadius,
+                                center = androidx.compose.ui.geometry.Offset(x, y)
+                            )
+                        }
                     }
                 }
-            },
-            focusManager = focusManager,
-            keyboardController = keyboardController
-        )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "$tempo BPM | Beat: ${if (isPlaying) "$currentBeat/${selectedTimeSignature.numerator}" else "--"}",
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 24.sp,
+                modifier = Modifier.padding(vertical = 16.dp)
+            )
+
+            Button(onClick = { isPlaying = !isPlaying }, modifier = Modifier.width(150.dp)) {
+                Text(if (isPlaying) "Pause" else "Play", color = Color.White)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                Button(onClick = { if (tempo > 40) onTempoChange(tempo - 1) }, modifier = Modifier.width(100.dp)) {
+                    Text("-1", color = Color.White)
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Button(onClick = { if (tempo < 220) onTempoChange(tempo + 1) }, modifier = Modifier.width(100.dp)) {
+                    Text("+1", color = Color.White)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Slider(
+                value = tempo.toFloat(),
+                onValueChange = { onTempoChange(it.toInt()) },
+                valueRange = 40f..220f,
+                steps = 180,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            BpmInput(
+                manualInput = manualInput,
+                onManualInputChange = {
+                    manualInput = it
+                    it.toIntOrNull()?.let { value ->
+                        if (value in 40..220) {
+                            onTempoChange(value)
+                        }
+                    }
+                },
+                focusManager = focusManager,
+                keyboardController = keyboardController
+            )
+        }
     }
 }
+
 
 
 @Composable
