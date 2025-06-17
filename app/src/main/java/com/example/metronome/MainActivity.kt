@@ -143,9 +143,15 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+
 // Add this enum class to your file
 enum class SortOption {
-    DATE, TITLE
+    DATE_DESC,  // Newest first
+    DATE_ASC,
+    TITLE_ASC,  // A-Z
+    TITLE_DESC  // Z-A
 }
 // Database Entity
 @Entity(tableName = "songs")
@@ -214,20 +220,17 @@ class SongRepository(private val songDao: SongDao) {
 // ViewModel
 class SongViewModel(private val repository: SongRepository) : ViewModel() {
     private val _songs = mutableStateOf<List<Song>>(emptyList())
-    //val songs: State<List<Song>> = _songs
-
     private val _isLoading = mutableStateOf(false)
     val isLoading: State<Boolean> = _isLoading
 
+    private var currentUserId: String = GUEST_USER_ID
+
+    // --- UPDATED STATE FOR SORT ---
     var searchQuery by mutableStateOf("")
-    var sortOption by mutableStateOf(SortOption.DATE) // Default sort is by date
+    // Default sort is now newest first
+    var sortOption by mutableStateOf(SortOption.DATE_DESC)
 
-    private var currentUserId: String = GUEST_USER_ID // Default to guest
-
-    // --- NEW DERIVED STATE FOR THE UI ---
-    // This will automatically re-calculate when the master list, search query, or sort option changes.
-    val filteredAndSortedSongs by derivedStateOf {
-        // Filter by search query first
+    val filteredAndSortedSongs: List<Song> by derivedStateOf {
         val filtered = if (searchQuery.isBlank()) {
             _songs.value
         } else {
@@ -237,10 +240,12 @@ class SongViewModel(private val repository: SongRepository) : ViewModel() {
             }
         }
 
-        // Then, sort the filtered list
+        // --- UPDATED SORTING LOGIC ---
         when (sortOption) {
-            SortOption.DATE -> filtered // The default DAO query is already sorted by date (id DESC)
-            SortOption.TITLE -> filtered.sortedBy { it.title }
+            SortOption.DATE_DESC -> filtered // Already sorted by id DESC from DAO
+            SortOption.DATE_ASC -> filtered.sortedBy { it.id } // Sort by id ASC for oldest first
+            SortOption.TITLE_ASC -> filtered.sortedBy { it.title }
+            SortOption.TITLE_DESC -> filtered.sortedByDescending { it.title }
         }
     }
 
@@ -1090,29 +1095,70 @@ fun SettingsScreen(
                 onValueChange = { viewModel.searchQuery = it },
                 label = { Text("Search by title or artist") },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = MaterialTheme.colorScheme.tertiary,
+                    unfocusedTextColor = MaterialTheme.colorScheme.tertiary
+                )
             )
+
+            // --- NEW AND IMPROVED SORT BUTTONS ---
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Sort by:",
-                    modifier = Modifier.align(Alignment.CenterVertically),
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Text("Sort by:", style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.tertiary)
+
+                // --- DATE SORT BUTTON ---
+                val isDateSortActive =
+                    viewModel.sortOption == SortOption.DATE_ASC || viewModel.sortOption == SortOption.DATE_DESC
                 Button(
-                    onClick = { viewModel.sortOption = SortOption.DATE },
-                    // Highlight the button if it's the active sort option
-                    colors = if (viewModel.sortOption == SortOption.DATE) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors()
+                    onClick = {
+                        // If already sorting by date, toggle direction. Otherwise, set to default date sort.
+                        viewModel.sortOption = if (isDateSortActive) {
+                            if (viewModel.sortOption == SortOption.DATE_DESC) SortOption.DATE_ASC else SortOption.DATE_DESC
+                        } else {
+                            SortOption.DATE_DESC
+                        }
+                    },
+                    colors = if (isDateSortActive) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors()
                 ) {
                     Text("Date")
+                    // Show sort direction icon if this button is active
+                    if (isDateSortActive) {
+                        Icon(
+                            imageVector = if (viewModel.sortOption == SortOption.DATE_DESC) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                            contentDescription = "Sort Direction",
+                            modifier = Modifier.size(18.dp).padding(start = 4.dp)
+                        )
+                    }
                 }
+
+                // --- TITLE SORT BUTTON ---
+                val isTitleSortActive =
+                    viewModel.sortOption == SortOption.TITLE_ASC || viewModel.sortOption == SortOption.TITLE_DESC
                 Button(
-                    onClick = { viewModel.sortOption = SortOption.TITLE },
-                    colors = if (viewModel.sortOption == SortOption.TITLE) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors()
+                    onClick = {
+                        // If already sorting by title, toggle direction. Otherwise, set to default title sort.
+                        viewModel.sortOption = if (isTitleSortActive) {
+                            if (viewModel.sortOption == SortOption.TITLE_ASC) SortOption.TITLE_DESC else SortOption.TITLE_ASC
+                        } else {
+                            SortOption.TITLE_ASC
+                        }
+                    },
+                    colors = if (isTitleSortActive) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors()
                 ) {
                     Text("Title")
+                    // Show sort direction icon if this button is active
+                    if (isTitleSortActive) {
+                        Icon(
+                            imageVector = if (viewModel.sortOption == SortOption.TITLE_ASC) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                            contentDescription = "Sort Direction",
+                            modifier = Modifier.size(18.dp).padding(start = 4.dp)
+                        )
+                    }
                 }
             }
         }
@@ -1159,9 +1205,36 @@ fun SettingsScreen(
             title = { Text("Add New Song") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextField(value = dialogTitle, onValueChange = { dialogTitle = it }, label = { Text("Song Title") })
-                    TextField(value = dialogArtist, onValueChange = { dialogArtist = it }, label = { Text("Artist") })
-                    TextField(value = dialogTempo, onValueChange = { dialogTempo = it }, label = { Text("Tempo (BPM)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    TextField(
+                        value = dialogTitle,
+                        onValueChange = { dialogTitle = it },
+                        label = { Text("Song Title") },
+                        colors = TextFieldDefaults.colors(
+                            focusedTextColor = MaterialTheme.colorScheme.tertiary,
+                            unfocusedTextColor = MaterialTheme.colorScheme.tertiary
+                        )
+                    )
+
+                    TextField(
+                        value = dialogArtist,
+                        onValueChange = { dialogArtist = it },
+                        label = { Text("Artist") },
+                        colors = TextFieldDefaults.colors(
+                            focusedTextColor = MaterialTheme.colorScheme.tertiary,
+                            unfocusedTextColor = MaterialTheme.colorScheme.tertiary
+                        )
+                    )
+
+                    TextField(
+                        value = dialogTempo,
+                        onValueChange = { dialogTempo = it },
+                        label = { Text("Tempo (BPM)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = TextFieldDefaults.colors(
+                            focusedTextColor = MaterialTheme.colorScheme.tertiary,
+                            unfocusedTextColor = MaterialTheme.colorScheme.tertiary
+                        )
+                    )
                     Box {
                         Surface(
                             modifier = Modifier.clickable { showTimeSignatureMenu = true }.fillMaxWidth(),
