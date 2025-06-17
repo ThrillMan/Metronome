@@ -143,6 +143,10 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
+import android.os.Vibrator
+import android.os.Build
+import android.os.VibrationEffect
+
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 
@@ -1396,10 +1400,11 @@ class SoundState {
     private var beatSoundId = 0
     private var downbeatSoundId = 0
     private var loaded = false
+    private var vibrator: Vibrator? = null
 
     fun init(context: Context) {
         if (soundPool != null) return
-
+        vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         soundPool = SoundPool.Builder()
             .setMaxStreams(2)
             .build()
@@ -1510,6 +1515,18 @@ class SoundState {
             return
         }
 
+        // Trigger vibration on downbeat
+        if (isDownbeat) {
+            Log.d("VIBRATION", "Vibration triggered!!")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                // deprecated in API 26
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(100)
+            }
+        }
+
         val soundId = if (isDownbeat) downbeatSoundId else beatSoundId
 
         if (soundId == 0) {
@@ -1534,6 +1551,7 @@ class SoundState {
         loaded = false
         beatSoundId = 0
         downbeatSoundId = 0
+        vibrator = null // Release the vibrator
         Log.d("SoundState", "Sound resources released")
     }
 }
