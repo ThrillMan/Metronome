@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "237939368810",
+    "project_id": "metronome-database-e0e52",
+    "storage_bucket": "metronome-database-e0e52.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:237939368810:android:f9b60c9a085dbd4834bb13",
+        "android_client_info": {
+          "package_name": "com.example.metronome"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "237939368810-sh1ia64siv236og4q23pket9m1e69tpt.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.metronome",
+            "certificate_hash": "6e96e539ead93a2b9f4ff9cccfceb7d2b28a216a"
+          }
+        },
+        {
+          "client_id": "237939368810-0lsgf0ukc6mtnn95llorkpic1ikjlrsc.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBRzSfxluM5ZseWEZMHqDN7aXameMIZdhw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "237939368810-0lsgf0ukc6mtnn95llorkpic1ikjlrsc.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
