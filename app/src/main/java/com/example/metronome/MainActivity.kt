@@ -139,7 +139,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.core.splashscreen.SplashScreen
 
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
+// Add this enum class to your file
+enum class SortOption {
+    DATE, TITLE
+}
 // Database Entity
 @Entity(tableName = "songs")
 data class Song(
@@ -207,12 +214,35 @@ class SongRepository(private val songDao: SongDao) {
 // ViewModel
 class SongViewModel(private val repository: SongRepository) : ViewModel() {
     private val _songs = mutableStateOf<List<Song>>(emptyList())
-    val songs: State<List<Song>> = _songs
+    //val songs: State<List<Song>> = _songs
 
     private val _isLoading = mutableStateOf(false)
     val isLoading: State<Boolean> = _isLoading
 
+    var searchQuery by mutableStateOf("")
+    var sortOption by mutableStateOf(SortOption.DATE) // Default sort is by date
+
     private var currentUserId: String = GUEST_USER_ID // Default to guest
+
+    // --- NEW DERIVED STATE FOR THE UI ---
+    // This will automatically re-calculate when the master list, search query, or sort option changes.
+    val filteredAndSortedSongs by derivedStateOf {
+        // Filter by search query first
+        val filtered = if (searchQuery.isBlank()) {
+            _songs.value
+        } else {
+            _songs.value.filter {
+                it.title.contains(searchQuery, ignoreCase = true) ||
+                        it.artist.contains(searchQuery, ignoreCase = true)
+            }
+        }
+
+        // Then, sort the filtered list
+        when (sortOption) {
+            SortOption.DATE -> filtered // The default DAO query is already sorted by date (id DESC)
+            SortOption.TITLE -> filtered.sortedBy { it.title }
+        }
+    }
 
     fun setCurrentUser(userId: String?) {
         currentUserId = userId ?: GUEST_USER_ID // Use guest ID if null
@@ -260,7 +290,7 @@ class SongViewModel(private val repository: SongRepository) : ViewModel() {
         sampleSongs.forEach { song ->
             repository.insertSong(song)
         }
-        loadSongs() // Reload songs after adding samples
+        //loadSongs() // Reload songs after adding samples
     }
 
     // ViewModelFactory
@@ -877,58 +907,57 @@ enum class AuthStatus {
 
 
 
-    class MainActivity : ComponentActivity() {
-        private lateinit var auth: FirebaseAuth
+class MainActivity : ComponentActivity() {
+    private lateinit var auth: FirebaseAuth
 
-        override fun onCreate(savedInstanceState: Bundle?) {
-            super.onCreate(savedInstanceState)
-            auth = Firebase.auth
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        auth = Firebase.auth
 
-            setContent {
-                MetronomeTheme {
-                    var showSplash by remember { mutableStateOf(true) }
-                    var authStatus by remember { mutableStateOf(AuthStatus.LOADING) }
+        setContent {
+            MetronomeTheme {
+                var showSplash by remember { mutableStateOf(true) }
+                var authStatus by remember { mutableStateOf(AuthStatus.LOADING) }
 
-                    // Check auth status when splash is done
-                    LaunchedEffect(showSplash) {
-                        if (!showSplash) {
-                            authStatus =
-                                if (auth.currentUser != null) AuthStatus.LOGGED_IN else AuthStatus.LOGGED_OUT
-                        }
+                // Check auth status when splash is done
+                LaunchedEffect(showSplash) {
+                    if (!showSplash) {
+                        authStatus =
+                            if (auth.currentUser != null) AuthStatus.LOGGED_IN else AuthStatus.LOGGED_OUT
                     }
+                }
 
-                    Surface {
-                        if (showSplash) {
-                            SplashScreen {
-                                showSplash = false
+                Surface {
+                    if (showSplash) {
+                        SplashScreen {
+                            showSplash = false
+                        }
+                    } else {
+                        when (authStatus) {
+                            AuthStatus.LOADING -> {
+                                // Show loading indicator or just wait
+                                // The LaunchedEffect above will update authStatus
                             }
-                        } else {
-                            when (authStatus) {
-                                AuthStatus.LOADING -> {
-                                    // Show loading indicator or just wait
-                                    // The LaunchedEffect above will update authStatus
-                                }
 
-                                AuthStatus.LOGGED_OUT -> {
-                                    AuthScreen(
-                                        onSignInSuccess = { authStatus = AuthStatus.LOGGED_IN },
-                                        onContinueAsGuest = { authStatus = AuthStatus.GUEST }
-                                    )
-                                }
+                            AuthStatus.LOGGED_OUT -> {
+                                AuthScreen(
+                                    onSignInSuccess = { authStatus = AuthStatus.LOGGED_IN },
+                                    onContinueAsGuest = { authStatus = AuthStatus.GUEST }
+                                )
+                            }
 
-                                AuthStatus.LOGGED_IN, AuthStatus.GUEST -> {
-                                    MetronomeApp(
-                                        authStatus = authStatus,
-                                        onSignOut = {
-                                            auth.signOut()
-                                            authStatus = AuthStatus.LOGGED_OUT
-                                        },
-                                        onLoginClicked = {
-                                            // This will navigate the user back to the login screen
-                                            authStatus = AuthStatus.LOGGED_OUT
-                                        }
-                                    )
-                                }
+                            AuthStatus.LOGGED_IN, AuthStatus.GUEST -> {
+                                MetronomeApp(
+                                    authStatus = authStatus,
+                                    onSignOut = {
+                                        auth.signOut()
+                                        authStatus = AuthStatus.LOGGED_OUT
+                                    },
+                                    onLoginClicked = {
+                                        // This will navigate the user back to the login screen
+                                        authStatus = AuthStatus.LOGGED_OUT
+                                    }
+                                )
                             }
                         }
                     }
@@ -936,6 +965,7 @@ enum class AuthStatus {
             }
         }
     }
+}
 
 
 @Composable
@@ -1018,7 +1048,7 @@ fun SettingsScreen(
     val coroutineScope = rememberCoroutineScope()
 
     // Observe ViewModel state
-    val songs by viewModel.songs
+    val songs = viewModel.filteredAndSortedSongs
     val isLoading by viewModel.isLoading
 
     // Load songs for the current user when the screen is shown or user ID changes
@@ -1053,6 +1083,40 @@ fun SettingsScreen(
                 )
             }
         }
+
+        Column(modifier = Modifier.padding(vertical = 8.dp)) {
+            OutlinedTextField(
+                value = viewModel.searchQuery,
+                onValueChange = { viewModel.searchQuery = it },
+                label = { Text("Search by title or artist") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+            ) {
+                Text(
+                    text = "Sort by:",
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Button(
+                    onClick = { viewModel.sortOption = SortOption.DATE },
+                    // Highlight the button if it's the active sort option
+                    colors = if (viewModel.sortOption == SortOption.DATE) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors()
+                ) {
+                    Text("Date")
+                }
+                Button(
+                    onClick = { viewModel.sortOption = SortOption.TITLE },
+                    colors = if (viewModel.sortOption == SortOption.TITLE) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors()
+                ) {
+                    Text("Title")
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // Songs list
